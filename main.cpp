@@ -7,7 +7,7 @@
 #define SNAKE_LENGTH 256
 #define CELL_SIZE 20
 
-#define FPS 60
+#define FPS 120
 
 bool gameOver = false;
 
@@ -45,9 +45,11 @@ typedef struct Food {
     Color color;
 } Food;
 
+float INIT_SPEED = 0.10;
+
 typedef struct Score_t {
     int score = {0};
-    float speed = 0.15f;
+    float speed = INIT_SPEED;
 } Score_t;
 
 void RespawnFood(Food *food) {
@@ -110,13 +112,20 @@ void CheckColision(Snake *snake) {
     //window
     if (snake->body[0].x < 0 || snake->body[0].x >= WINDOW_WIDTH ||
         snake->body[0].y < 0 || snake->body[0].y >= WINDOW_HEIGHT) {
+
         gameOver = true;
         return;
     }
-    //snake
-    if (snake->body[0].x == snake->body[SNAKE_LENGTH].x) {
-        gameOver = true;
-        return;
+    //snake, tentativa de fazer if body[0] == body[snake_...], foi não rs,
+    //default like updatesnakemov
+    
+    for (int i = snake->bodyLength - 1; i > 0; i--) {
+        if (snake->body[0].x == snake->body[i].x &&
+            snake->body[0].y == snake->body[i].y) {
+
+            gameOver = true;
+            return;
+        }
     }
 }
 
@@ -139,6 +148,10 @@ void EatFood(Snake *snake, Food *food, Score_t *s) {
             snake->bodyLength++;
         }
         s->score += 5;
+
+        if (s->speed > 0.07f) {
+            s->speed -= 0.02f;
+        }
     }
 }
 
@@ -151,10 +164,12 @@ int main() {
     InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "SNAKE");
     SetTargetFPS(FPS);
 
-    Score_t score = {0};
+
+    struct Score_t Score = {0, INIT_SPEED};
+
 
     Timer moveTimer = {0};
-    StartTimer(&moveTimer, 0.15f);
+    StartTimer(&moveTimer, Score.speed);
 
     Food food = {0};
     food.size = (Vector2){CELL_SIZE, CELL_SIZE};
@@ -174,14 +189,15 @@ int main() {
             UpdateTimer(&moveTimer);
             if (TimerDone(&moveTimer)) {
                 UpdateSnakeMoviment(&snake);
-                EatFood(&snake, &food, &score);
+                EatFood(&snake, &food, &Score);
                 CheckColision(&snake);
 
-                StartTimer(&moveTimer, 0.15f);
+                StartTimer(&moveTimer, Score.speed);
             }
         } else {
             if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE)) {
-                score.score = 0;
+                 Score.score = 0;
+                 Score.speed = INIT_SPEED;
                 ResetGame(&snake, &food, &moveTimer);
             }
         }
@@ -192,7 +208,7 @@ int main() {
 
         DrawFood(food);
         DrawSnake(snake);
-        DrawScore(score);
+        DrawScore(Score);
 
         if (gameOver) {
             DrawText("Perdeu, Enter ou Espaço pra reiniciar.",
