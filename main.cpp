@@ -63,9 +63,10 @@ struct Score_t {
 };
 
 void RespawnFood(Food *food) {
-    //util area to create a food, 40 blocks - 2 "blocks" to not live in maxX, one block before to limit 
+    //util area to create a food, 40 blocks - 2 "blocks" to not born in the last block, so one block before to limit 
     int maxX = (WINDOW_WIDTH / CELL_SIZE) - 2;
     int maxY = (WINDOW_HEIGHT / CELL_SIZE) - 2;
+    
     //sort for (i = 1; i < maxX || maxY; i++) -> sort position
     food->position.x = GetRandomValue(1, maxX) * CELL_SIZE;
     food->position.y = GetRandomValue(1, maxY) * CELL_SIZE;
@@ -76,9 +77,11 @@ void DrawFood(Food food) {
 }
 
 void RespawnSnake(Snake *snake) {
+    //The same of RespawnFood() but can born in the limit util.
     int maxX = (WINDOW_WIDTH / CELL_SIZE) - 1;
     int maxY = (WINDOW_HEIGHT / CELL_SIZE) - 1;
 
+    //born with 3 blocks
     snake->bodyLength = 3;
     snake->direction = Vector2{1, 0}; // Starts moving Right
 
@@ -86,7 +89,9 @@ void RespawnSnake(Snake *snake) {
     int startX = GetRandomValue(snake->bodyLength, maxX);
     int startY = GetRandomValue(0, maxY);
 
-    // Initialize the head and the rest of the body correctly behind it
+    /* Initialize the head and the rest of the body correctly behind it
+        Yes, there was a bug. I was making (for){draw}
+     */
     for (int i = 0; i < snake->bodyLength; i++) {
         snake->body[i].x = (startX - i) * CELL_SIZE;
         snake->body[i].y = startY * CELL_SIZE;
@@ -94,13 +99,15 @@ void RespawnSnake(Snake *snake) {
 }
 
 void DrawSnake(Snake snake) {
+    //and here the for(){draw}
     for (int i = 0; i < snake.bodyLength; i++) {
         DrawRectangleV(snake.body[i], snake.size, snake.color);
     }
 }
 
 void UpdateSnakeDirection(Snake *snake) {
-    // allowMove ensures we only register one direction change per grid step
+    // allowMove ensures we only register one direction change
+    // In the older versions there was a bug, to return the withou made a curve. In this way we need make it 
     if (allowMove) {
         if (IsKeyPressed(KEY_RIGHT) && snake->direction.x == 0) {
             snake->direction = Vector2{1, 0};
@@ -122,17 +129,19 @@ void UpdateSnakeDirection(Snake *snake) {
 }
 
 void UpdateSnakeMovement(Snake *snake) {
-    // Tail follows the head
+    // from end to init the body need follow the head
     for (int i = snake->bodyLength - 1; i > 0; i--) {
         snake->body[i] = snake->body[i - 1];
     }
-
+    //this make the reason to snake "walk", 
+    //like {1, 0} -> right move
+    // dir.x 1 * 20 = 20, so continues right move, if, left -1 so -20, so, left
     snake->body[0].x += snake->direction.x * CELL_SIZE;
     snake->body[0].y += snake->direction.y * CELL_SIZE;
 }
 
 void CheckCollision(Snake *snake) {
-    // Window boundaries collision
+    // Window collision
     if (snake->body[0].x < 0 || snake->body[0].x >= WINDOW_WIDTH ||
         snake->body[0].y < 0 || snake->body[0].y >= WINDOW_HEIGHT) {
         gameOver = true;
@@ -150,6 +159,7 @@ void CheckCollision(Snake *snake) {
 }
 
 void ResetGame(Snake *snake, Food *food, Timer *moveTimer, Score_t *score) {
+    //in older version it was in main func. 
     if (gameOver) {
         RespawnSnake(snake);
         RespawnFood(food);
@@ -173,7 +183,7 @@ void EatFood(Snake *snake, Food *food, Score_t *s) {
 
         s->score += 5;
 
-        // Cap maximum speed so it doesn't become impossibly fast or negative
+        // Cap max speed so it cant be negative
         if (s->speed > 0.05f) {
             s->speed -= 0.005f; // Slowed down the speed ramp up slightly
         }
