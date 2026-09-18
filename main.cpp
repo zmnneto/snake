@@ -8,11 +8,11 @@
 
 //THE BLOCK OF THINGS
 #define CELL_SIZE 20
-//there is a raylib func named void SetTargetFPS(int fps); But I dontunderstand if is the max of cpu frame, or 
+//there is a raylib func named void SetTargetFPS(int fps); But I dontunderstand if is the max of cpu frame, or anything else, like display. So i maked it fix
 #define FPS 60
 
 /*
-    0.133f; because there is a calculate, 60 fps, each frame in 0.0166s, so 0.133/0.0166, so 8 frames. 
+    0.133f; because there is a calculate, 60 fps, each frame in 0.0166s, so 0.133/0.0166, so 8 frames. another value can make a frame "broke", like 7.3frames.
     Yes, there was a bug.
 */
 const float INIT_SPEED = 0.133f;
@@ -45,7 +45,7 @@ bool TimerDone(Timer *timer) {
 //Vector2 is a 2 components vector<>
 struct Snake {
     Vector2 body[SNAKE_LENGTH];
-    int bodyLength = 3;  //Gemini was told to remove of struct, because can broke 'C', i dont understand why, there is no bugs 
+    int bodyLength = 3;  //Gemini was told to remove of struct, because can broke 'C', i dont understand why, there is no bugs, maybe about older 256 lenght
     Vector2 size;
     Vector2 direction;
     Color color;
@@ -63,8 +63,10 @@ struct Score_t {
 };
 
 void RespawnFood(Food *food) {
+    //util area to create a food, 40 blocks - 2 "blocks" to not live in maxX, one block before to limit 
     int maxX = (WINDOW_WIDTH / CELL_SIZE) - 2;
     int maxY = (WINDOW_HEIGHT / CELL_SIZE) - 2;
+    //sort for (i = 1; i < maxX || maxY; i++) -> sort position
     food->position.x = GetRandomValue(1, maxX) * CELL_SIZE;
     food->position.y = GetRandomValue(1, maxY) * CELL_SIZE;
 }
