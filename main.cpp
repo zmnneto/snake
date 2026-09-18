@@ -1,62 +1,59 @@
 #include "raylib.h"
-#include <cstdlib>
 
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
 
 #define SNAKE_LENGTH 256
 #define CELL_SIZE 20
+#define FPS 60
 
-#define FPS 120
-
+const float INIT_SPEED = 0.133f;
 bool gameOver = false;
+bool allowMove = true; // Prevents the rapid double-keypress suicide bug
 
-typedef struct Timer {
+struct Timer {
     float lifetime;
-} Timer;
+};
 
 void StartTimer(Timer *timer, float lifetime) {
-    if (timer != NULL) { timer->lifetime = lifetime; }
+    if (timer != nullptr) { timer->lifetime = lifetime; }
 }
 
 void UpdateTimer(Timer *timer) {
-    if (timer != NULL) {
+    if (timer != nullptr) {
         timer->lifetime -= GetFrameTime();
     }
 }
 
 bool TimerDone(Timer *timer) {
-    if (timer != NULL) { return timer->lifetime <= 0; }
+    if (timer != nullptr) { return timer->lifetime <= 0; }
     return false;
 }
 
-typedef struct Snake {
-    Vector2 body[SNAKE_LENGTH]; //TEM QUE SER SEPARADO PARA CURVAS, SE NAO SERIA UMA CABEÇA GIGANTE
-    int bodyLength = 0; // o body
-    // Vector2 position;
+struct Snake {
+    Vector2 body[SNAKE_LENGTH];
+    int bodyLength = 3;
     Vector2 size;
     Vector2 direction;
     Color color;
-} Snake;
+};
 
-typedef struct Food {
+struct Food {
     Vector2 position;
     Vector2 size;
     Color color;
-} Food;
+};
 
-float INIT_SPEED = 0.10;
-
-typedef struct Score_t {
-    int score = {0};
+struct Score_t {
+    int score = 0;
     float speed = INIT_SPEED;
-} Score_t;
+};
 
 void RespawnFood(Food *food) {
-    int maxX = (WINDOW_WIDTH / CELL_SIZE) - 1;
-    int maxY = (WINDOW_HEIGHT / CELL_SIZE) - 1;
-    food->position.x = GetRandomValue(0, maxX) * CELL_SIZE;
-    food->position.y = GetRandomValue(0, maxY) * CELL_SIZE;
+    int maxX = (WINDOW_WIDTH / CELL_SIZE) - 2;
+    int maxY = (WINDOW_HEIGHT / CELL_SIZE) - 2;
+    food->position.x = GetRandomValue(1, maxX) * CELL_SIZE;
+    food->position.y = GetRandomValue(1, maxY) * CELL_SIZE;
 }
 
 void DrawFood(Food food) {
@@ -67,12 +64,18 @@ void RespawnSnake(Snake *snake) {
     int maxX = (WINDOW_WIDTH / CELL_SIZE) - 1;
     int maxY = (WINDOW_HEIGHT / CELL_SIZE) - 1;
 
-    snake->body[0].x = GetRandomValue(0, maxX) * CELL_SIZE;
-    snake->body[0].y = GetRandomValue(0, maxY) * CELL_SIZE;
+    snake->bodyLength = 3;
+    snake->direction = Vector2{1, 0}; // Starts moving Right
 
-    snake->bodyLength = 1;
+    // Ensure the snake spawns far enough from the left wall so the tail fits
+    int startX = GetRandomValue(snake->bodyLength, maxX);
+    int startY = GetRandomValue(0, maxY);
 
-    snake->direction = (Vector2){1, 0}; // Começa parada
+    // Initialize the head and the rest of the body correctly behind it
+    for (int i = 0; i < snake->bodyLength; i++) {
+        snake->body[i].x = (startX - i) * CELL_SIZE;
+        snake->body[i].y = startY * CELL_SIZE;
+    }
 }
 
 void DrawSnake(Snake snake) {
@@ -82,24 +85,29 @@ void DrawSnake(Snake snake) {
 }
 
 void UpdateSnakeDirection(Snake *snake) {
-    if (IsKeyPressed(KEY_RIGHT) && snake->direction.x == 0) {
-        snake->direction = (Vector2){1, 0};
-    }
-    if (IsKeyPressed(KEY_LEFT) && snake->direction.x == 0) {
-        snake->direction = (Vector2){-1, 0};
-    }
-    // Y negativo = Para Cima
-    if (IsKeyPressed(KEY_UP) && snake->direction.y == 0) {
-        snake->direction = (Vector2){0, -1};
-    }
-    // Y positivo = Para Baixo
-    if (IsKeyPressed(KEY_DOWN) && snake->direction.y == 0) {
-        snake->direction = (Vector2){0, 1};
+    // allowMove ensures we only register one direction change per grid step
+    if (allowMove) {
+        if (IsKeyPressed(KEY_RIGHT) && snake->direction.x == 0) {
+            snake->direction = Vector2{1, 0};
+            allowMove = false;
+        }
+        if (IsKeyPressed(KEY_LEFT) && snake->direction.x == 0) {
+            snake->direction = Vector2{-1, 0};
+            allowMove = false;
+        }
+        if (IsKeyPressed(KEY_UP) && snake->direction.y == 0) {
+            snake->direction = Vector2{0, -1};
+            allowMove = false;
+        }
+        if (IsKeyPressed(KEY_DOWN) && snake->direction.y == 0) {
+            snake->direction = Vector2{0, 1};
+            allowMove = false;
+        }
     }
 }
 
-void UpdateSnakeMoviment(Snake *snake) {
-    //da calda para cabeça segue o bloco da frente
+void UpdateSnakeMovement(Snake *snake) {
+    // Tail follows the head
     for (int i = snake->bodyLength - 1; i > 0; i--) {
         snake->body[i] = snake->body[i - 1];
     }
@@ -108,55 +116,57 @@ void UpdateSnakeMoviment(Snake *snake) {
     snake->body[0].y += snake->direction.y * CELL_SIZE;
 }
 
-void CheckColision(Snake *snake) {
-    //window
+void CheckCollision(Snake *snake) {
+    // Window boundaries collision
     if (snake->body[0].x < 0 || snake->body[0].x >= WINDOW_WIDTH ||
         snake->body[0].y < 0 || snake->body[0].y >= WINDOW_HEIGHT) {
-
         gameOver = true;
         return;
     }
-    //snake, tentativa de fazer if body[0] == body[snake_...], foi não rs,
-    //default like updatesnakemov
-    
+
+    // Self-collision check
     for (int i = snake->bodyLength - 1; i > 0; i--) {
         if (snake->body[0].x == snake->body[i].x &&
             snake->body[0].y == snake->body[i].y) {
-
             gameOver = true;
             return;
         }
     }
 }
 
-void ResetGame(Snake *snake, Food *food, Timer *moveTimer) {
-    if (gameOver == true) {
+void ResetGame(Snake *snake, Food *food, Timer *moveTimer, Score_t *score) {
+    if (gameOver) {
         RespawnSnake(snake);
         RespawnFood(food);
-        StartTimer(moveTimer, 0.15f);
+        score->score = 0;
+        score->speed = INIT_SPEED;
+        StartTimer(moveTimer, score->speed);
         gameOver = false;
+        allowMove = true;
     }
 }
 
 void EatFood(Snake *snake, Food *food, Score_t *s) {
-    //aparentemente isso seria o Vector2, basicamente .x && .y
     if (snake->body[0].x == food->position.x &&
         snake->body[0].y == food->position.y) {
+
         RespawnFood(food);
 
         if (snake->bodyLength < SNAKE_LENGTH) {
             snake->bodyLength++;
         }
+
         s->score += 5;
 
-        if (s->speed > 0.07f) {
-            s->speed -= 0.02f;
+        // Cap maximum speed so it doesn't become impossibly fast or negative
+        if (s->speed > 0.05f) {
+            s->speed -= 0.005f; // Slowed down the speed ramp up slightly
         }
     }
 }
 
 void DrawScore(Score_t s) {
-    DrawText(TextFormat("Pointing: %d", s.score), 10, 10, 20, WHITE);
+    DrawText(TextFormat("Pontos: %d", s.score), 10, 10, 20, WHITE);
 }
 
 
@@ -164,20 +174,18 @@ int main() {
     InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "SNAKE");
     SetTargetFPS(FPS);
 
-
-    struct Score_t Score = {0, INIT_SPEED};
-
+    Score_t Score;
 
     Timer moveTimer = {0};
     StartTimer(&moveTimer, Score.speed);
 
     Food food = {0};
-    food.size = (Vector2){CELL_SIZE, CELL_SIZE};
+    food.size = Vector2{CELL_SIZE, CELL_SIZE};
     food.color = RED;
     RespawnFood(&food);
 
     Snake snake = {0};
-    snake.size = (Vector2){CELL_SIZE, CELL_SIZE};
+    snake.size = Vector2{CELL_SIZE, CELL_SIZE};
     snake.color = WHITE;
     RespawnSnake(&snake);
 
@@ -185,24 +193,24 @@ int main() {
         if (!gameOver) {
             UpdateSnakeDirection(&snake);
 
-            // 2. Atualização da lógica de jogo / movimentação
+            // Update game logic / movement
             UpdateTimer(&moveTimer);
             if (TimerDone(&moveTimer)) {
-                UpdateSnakeMoviment(&snake);
+                UpdateSnakeMovement(&snake);
+                allowMove = true; // Snake has moved, allow a new direction input
+
                 EatFood(&snake, &food, &Score);
-                CheckColision(&snake);
+                CheckCollision(&snake);
 
                 StartTimer(&moveTimer, Score.speed);
             }
         } else {
             if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE)) {
-                 Score.score = 0;
-                 Score.speed = INIT_SPEED;
-                ResetGame(&snake, &food, &moveTimer);
+                ResetGame(&snake, &food, &moveTimer, &Score);
             }
         }
 
-        // 3. Desenho
+        // Drawing Phase
         BeginDrawing();
         ClearBackground(BLACK);
 
@@ -211,10 +219,13 @@ int main() {
         DrawScore(Score);
 
         if (gameOver) {
-            DrawText("Perdeu, Enter ou Espaço pra reiniciar.",
-                     WINDOW_WIDTH / 2 - 140, WINDOW_HEIGHT / 2 - 40, 40, RED);
+            const char* gameOverText = "Perdeu! Enter ou Espaço para reiniciar.";
+            int textWidth = MeasureText(gameOverText, 30);
+            DrawText(gameOverText, (WINDOW_WIDTH / 2) - (textWidth / 2), (WINDOW_HEIGHT / 2) - 15, 30, RED);
         }
-        DrawText("Pressione as setas para mover | ESPACO para resetar", 10, 550, 20, DARKGRAY);
+
+        DrawText("Setas para mover | ESPACO para resetar", 10, WINDOW_HEIGHT - 30, 20, DARKGRAY);
+
         EndDrawing();
     }
 
